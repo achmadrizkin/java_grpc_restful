@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package com.example.demo;
+
+option java_multiple_files = true;
+option java_package = "com.example.demo";
+
+message ProductRequest {
+  int32 id = 1;
+  string name = 2;
+  string description = 3;
+  double price = 4;
+}
+
+message ProductId {
+  int32 id = 1;
+}
+
+message ProductResponse {
+  bool success = 1;
+  string message = 2;
+  ProductRequest product = 3;
+}
+
+message ProductDeleteResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ProductListResponse {
+  bool success = 1;
+  string message = 2;
+  repeated ProductRequest products = 3;
+}
+
+message ProductEmpty {}
+
+service ProductService {
+  rpc CreateProduct(ProductRequest) returns (ProductResponse);
+  rpc GetProduct(ProductId) returns (ProductResponse);
+  rpc UpdateProduct(ProductRequest) returns (ProductResponse);
+  rpc DeleteProduct(ProductId) returns (ProductDeleteResponse);
+  rpc ListProducts(ProductEmpty) returns (ProductListResponse);
+}

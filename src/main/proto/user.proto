@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package com.example.demo;
+
+option java_multiple_files = true;
+option java_package = "com.example.demo";
+
+message UserRequest {
+  int32 id = 1;
+  string name = 2;
+  string email = 3;
+  string password = 4;
+}
+
+message UserId {
+  int32 id = 1;
+}
+
+message UserResponse {
+  bool success = 1;
+  string message = 2;
+  UserRequest user = 3;
+}
+
+message UserDeleteResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UserListResponse {
+  bool success = 1;
+  string message = 2;
+  repeated UserRequest users = 3;
+}
+
+message UserEmpty {}
+
+service UserService {
+  rpc CreateUser(UserRequest) returns (UserResponse);
+  rpc GetUser(UserId) returns (UserResponse);
+  rpc UpdateUser(UserRequest) returns (UserResponse);
+  rpc DeleteUser(UserId) returns (UserDeleteResponse);
+  rpc ListUsers(UserEmpty) returns (UserListResponse);
+}
