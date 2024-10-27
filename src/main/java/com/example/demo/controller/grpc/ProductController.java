@@ -1,19 +1,43 @@
 package com.example.demo.controller.grpc;
 
 import com.example.demo.*;
+import com.example.demo.model.Product;
+import com.example.demo.service.ProductService;
 import io.grpc.stub.StreamObserver;
 import net.devh.boot.grpc.server.service.GrpcService;
+import org.springframework.beans.factory.annotation.Autowired;
 
-import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @GrpcService
 public class ProductController extends ProductServiceGrpc.ProductServiceImplBase {
+
+    @Autowired
+    private ProductService productService;
+
     @Override
     public void createProduct(ProductRequest productReq, StreamObserver<ProductResponse> productResponseObserver) {
         System.out.println("--- created product executed ---");
 
-        ProductResponse productResponse = ProductResponse.newBuilder().setProduct(productReq).setMessage("Created product success").setSuccess(true).build();
+        // Create a new Product without setting the ID, as it will be auto-generated
+        Product createdProduct = productService.createProduct(productReq);
+
+        // Build the ProductRequest from createdProduct to reflect any auto-generated fields
+        ProductRequest createdProductRequest = ProductRequest.newBuilder()
+                .setId(productReq.getId()) // Use the auto-generated ID from createdProduct
+                .setName(productReq.getName())
+                .setDescription(productReq.getDescription())
+                .setPrice(productReq.getPrice())
+                .build();
+
+        // Build the response using the createdProductRequest
+        ProductResponse productResponse = ProductResponse.newBuilder()
+                .setProduct(createdProductRequest)
+                .setMessage("Created product success")
+                .setSuccess(true)
+                .build();
 
         // Send the response and mark the process as completed
         productResponseObserver.onNext(productResponse);
@@ -22,13 +46,44 @@ public class ProductController extends ProductServiceGrpc.ProductServiceImplBase
 
     @Override
     public void getProduct(ProductId productId, StreamObserver<ProductResponse> productResponseObserver) {
-        System.out.println("--- get product by " + productId + " ---");
+        System.out.println("--- get product by ID: " + productId.getId() + " ---");
 
-        ProductRequest productResponsee = ProductRequest.newBuilder().setId(12).setName("Product A").setDescription("Test").setPrice(100).build();
-        ProductResponse productResponse = ProductResponse.newBuilder().setProduct(productResponsee).setMessage("Get product success").setSuccess(true).build();
+        // Attempt to retrieve the product by ID
+        Optional<Product> productOpt = productService.getProductById(productId.getId());
 
-        // Send the response and mark the process as completed
-        productResponseObserver.onNext(productResponse);
+        // Check if the product is available
+        if (productOpt.isPresent()) {
+            Product product = productOpt.get();
+
+            // Build the ProductRequest from the retrieved product
+            ProductRequest prod = ProductRequest.newBuilder()
+                    .setId(product.getId().intValue())  // Assuming id is of type Long; convert to int if necessary
+                    .setName(product.getName())
+                    .setDescription(product.getDescription())
+                    .setPrice(product.getPrice().doubleValue())  // Assuming price is BigDecimal; convert to double if necessary
+                    .build();
+
+            // Build the successful ProductResponse
+            ProductResponse productResponse = ProductResponse.newBuilder()
+                    .setProduct(prod)
+                    .setMessage("Get product success")
+                    .setSuccess(true)
+                    .build();
+
+            // Send the successful response
+            productResponseObserver.onNext(productResponse);
+        } else {
+            // Build an error response if the product is not found
+            ProductResponse productResponse = ProductResponse.newBuilder()
+                    .setMessage("Product not found")
+                    .setSuccess(false)
+                    .build();
+
+            // Send the error response
+            productResponseObserver.onNext(productResponse);
+        }
+
+        // Mark the process as completed
         productResponseObserver.onCompleted();
     }
 
@@ -36,13 +91,21 @@ public class ProductController extends ProductServiceGrpc.ProductServiceImplBase
     public void listProducts(ProductEmpty productEmpty, StreamObserver<ProductListResponse> productListResponseObserver) {
         System.out.println("--- get list product ---");
 
-        // Create a list of ProductRequest objects (sample products)
-        List<ProductRequest> products = Arrays.asList(
-                ProductRequest.newBuilder().setId(1).setName("Product 1").setDescription("Description 1").setPrice(10.0).build(),
-                ProductRequest.newBuilder().setId(2).setName("Product 2").setDescription("Description 2").setPrice(20.0).build()
-        );
+        // Retrieve the list of products from the product service
+        List<Product> listProducts = productService.listProducts();
+        System.out.println("listProducts: "+ listProducts);
 
-        // Build the ProductListResponse with the product list using addAllProducts
+        // Convert each Product entity to a ProductRequest and collect them into a list
+        List<ProductRequest> products = listProducts.stream()
+                .map(product -> ProductRequest.newBuilder()
+                        .setId(product.getId().intValue())  // Assuming id is of type Long; convert to int if necessary
+                        .setName(product.getName())
+                        .setDescription(product.getDescription())
+                        .setPrice(product.getPrice().doubleValue())  // Assuming price is BigDecimal; convert to double if necessary
+                        .build())
+                .collect(Collectors.toList());
+
+        // Build the ProductListResponse with the product list
         ProductListResponse productListResponse = ProductListResponse.newBuilder()
                 .setSuccess(true)
                 .setMessage("Get all list product success")
@@ -56,19 +119,69 @@ public class ProductController extends ProductServiceGrpc.ProductServiceImplBase
 
     @Override
     public void updateProduct(ProductRequest productRequest, StreamObserver<ProductResponse> productResponseObserver) {
-        ProductResponse productResponse = ProductResponse.newBuilder().setProduct(productRequest).setMessage("Created product success").setSuccess(true).build();
+        System.out.println("--- update product by " + productRequest.getId() + " ---");
 
-        // Send the response and mark the process as completed
-        productResponseObserver.onNext(productResponse);
+        Optional<Product> productOpt = productService.getProductById(productRequest.getId());
+        if (productOpt.isPresent()) {
+            Product createdProduct = productService.updateProduct(productRequest);
+
+            ProductRequest prodReq = ProductRequest.newBuilder()
+                    .setId(productRequest.getId())
+                    .setName(productRequest.getName())
+                    .setDescription(productRequest.getDescription())
+                    .setPrice(productRequest.getPrice())
+                    .build();
+
+            // Build the successful ProductResponse
+            ProductResponse productDeleteResponse = ProductResponse.newBuilder()
+                    .setProduct(prodReq)
+                    .setMessage("Update product success by " + productRequest.getId())
+                    .setSuccess(true)
+                    .build();
+
+            // Send the successful response
+            productResponseObserver.onNext(productDeleteResponse);
+        } else {
+            ProductResponse productDeleteResponse = ProductResponse.newBuilder()
+                    .setMessage("Product id is not found")
+                    .setSuccess(false)
+                    .build();
+
+            // Send the error response
+            productResponseObserver.onNext(productDeleteResponse);
+        }
         productResponseObserver.onCompleted();
     }
 
     @Override
     public void deleteProduct(ProductId productId, StreamObserver<ProductDeleteResponse> productDeleteResponseObserver) {
-        ProductDeleteResponse productDeleteResponse = ProductDeleteResponse.newBuilder().setMessage("Delete Success").setSuccess(true).build();
+        System.out.println("--- delete product by " + productId + " ---");
 
-        // Send the response and mark the process as completed
-        productDeleteResponseObserver.onNext(productDeleteResponse);
+        // Attempt to retrieve the product by ID
+        Optional<Product> productOpt = productService.getProductById(productId.getId());
+
+        // Check if the product is available
+        if (productOpt.isPresent()) {
+            productService.deleteProduct(productId.getId());
+
+            // Build the successful ProductResponse
+            ProductDeleteResponse productDeleteResponse = ProductDeleteResponse.newBuilder()
+                    .setMessage("Delete product success")
+                    .setSuccess(true)
+                    .build();
+
+            // Send the successful response
+            productDeleteResponseObserver.onNext(productDeleteResponse);
+        } else {
+            // Build an error response if the product is not found
+            ProductDeleteResponse productResponse = ProductDeleteResponse.newBuilder()
+                    .setMessage("Product not found")
+                    .setSuccess(false)
+                    .build();
+
+            // Send the error response
+            productDeleteResponseObserver.onNext(productResponse);
+        }
         productDeleteResponseObserver.onCompleted();
     }
 }
