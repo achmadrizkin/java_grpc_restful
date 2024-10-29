@@ -1,0 +1,40 @@
+name: CI/CD Pipeline for Spring Boot
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up JDK
+      uses: actions/setup-java@v2
+      with:
+        distribution: 'temurin'  # Or another JDK distribution
+        java-version: '11'  # Change based on your project requirements
+
+    - name: Cache Maven packages
+      uses: actions/cache@v2
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven
+
+    - name: Build with Maven
+      run: mvn clean install -DskipTests
+
+    - name: Run tests
+      run: mvn test
+
+    - name: Package Application
+      run: mvn package -DskipTests
