@@ -6,13 +6,21 @@ import com.example.demo.model.User;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.utils.Hash;
 import com.example.demo.utils.JwtUtils;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class UserService {
@@ -20,8 +28,17 @@ public class UserService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
+
+    @Value("${spring.redis.ttl}")
+    private String ttl;
+
     public ResponseEntity<Response<List<User>>> getAllUsers(String authHeader) {
+        String redisToken = "USERS-getAllUsers";
+        ObjectMapper objectMapper = new ObjectMapper();
         Response<List<User>> response = new Response<>();
+
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             response.setStatusCode(HttpStatus.UNAUTHORIZED.value());
             response.setMessage("Authorization header is missing or invalid.");
@@ -35,18 +52,45 @@ public class UserService {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
         }
 
+        ValueOperations<String, String> valueOps = redisTemplate.opsForValue();
+        String cachedUsersJson = valueOps.get(redisToken);
+        if (cachedUsersJson != null) {
+            try {
+                // Parse JSON and extract the users list
+                Map<String, Object> cachedMap = objectMapper.readValue(cachedUsersJson, Map.class);
+                List<User> users = objectMapper.convertValue(cachedMap.get("users"), List.class);
+                response.setStatusCode(HttpStatus.OK.value());
+                response.setPayload(users);
+                response.setMessage("Users retrieved successfully from cache!");
+                return ResponseEntity.status(HttpStatus.OK).body(response);
+            } catch (JsonProcessingException e) {
+                e.printStackTrace();
+            }
+        }
+
         List<User> usersResponse = userRepository.findAll();
         if (usersResponse.isEmpty()) {
             response.setStatusCode(HttpStatus.BAD_REQUEST.value());
             response.setPayload(usersResponse);
             response.setMessage("Users data is empty");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-        } else {
-            response.setStatusCode(HttpStatus.OK.value());
-            response.setPayload(usersResponse);
-            response.setMessage("Users retrieved successfully!");
-            return ResponseEntity.status(HttpStatus.OK).body(response);
         }
+
+        Map<String, Object> mapToCache = new HashMap<>();
+        mapToCache.put("users", usersResponse);
+        mapToCache.put("success", true);
+        mapToCache.put("message", "Users retrieved successfully!");
+        try {
+            String usersJson = objectMapper.writeValueAsString(mapToCache);
+            valueOps.set(redisToken, usersJson, Long.parseLong(ttl), TimeUnit.MINUTES);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
+
+        response.setStatusCode(HttpStatus.OK.value());
+        response.setPayload(usersResponse);
+        response.setMessage("Users retrieved successfully!");
+        return ResponseEntity.status(HttpStatus.OK).body(response);
     }
 
     public ResponseEntity<Response<User>> createUser(User user) {

@@ -49,8 +49,3 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '21'
-
-    - name: Deploy to GitHub Packages (Maven)
-      run: mvn deploy -s settings.xml
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
