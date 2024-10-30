@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package com.example.demo;
+
+option java_multiple_files = true;
+option java_package = "com.example.demo";
+
+message Notification {
+  int32 id = 1;
+  string title = 3;
+  string message = 4;
+  string type = 5;
+}
+
+message NotificationResponse {
+  bool success = 1;
+  string message = 2;
+  Notification notification = 3;
+}
+
+service NotificationService {
+  rpc SendNotification(Notification) returns (NotificationResponse);
+}
